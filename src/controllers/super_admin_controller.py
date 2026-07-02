@@ -1,15 +1,57 @@
-import os
-from flask_jwt_extended import jwt_required, get_jwt 
-from flask import Blueprint, request, jsonify
+# src/controllers/super_admin_controller.py
+from flask import request, jsonify
+from flask_jwt_extended import create_access_token, get_jwt
 from werkzeug.security import generate_password_hash
-from src.db import db
-from src.models.school_model import School  
+from src.extensions import db  # db अब extensions.py से इम्पोर्ट हो रहा है
+from src.models.school_model import School
 
-create_school_admin_bp = Blueprint('create_school_admin', __name__, url_prefix='/api/v1')
+def super_admin_login_logic():
+    """1. सुपर एडमिन लॉगिन लॉजिक (PostgreSQL crypt() आधारित)"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing JSON request payload"}), 400
+            
+        email = data.get('email')
+        password = data.get('password')
 
-@create_school_admin_bp.route('/create-school-admin', methods=['POST'])
-@jwt_required()
-def create_school_college_admin():
+        if not email or not password:
+            return jsonify({"error": "Email and password are required"}), 400
+
+        # PostgreSQL crypt() के ज़रिए पासवर्ड मैच करने की क्वेरी
+        query = """
+            SELECT id, name, email FROM public.super_admins 
+            WHERE email = :email AND password_hash = crypt(:password, password_hash);
+        """
+        result = db.session.execute(db.text(query), {"email": email, "password": password}).fetchone()
+
+        if result is None:
+            return jsonify({"error": "Invalid Email or Password"}), 401
+
+        # रियल JWT टोकन जनरेशन (सुपर एडमिन रोल के साथ)
+        access_token = create_access_token(
+            identity=str(result[0]), 
+            additional_claims={"role": "super_admin"}
+        )
+
+        return jsonify({
+            "success": True,
+            "message": "Super Admin Login Successful!",
+            "token": access_token,
+            "user": {
+                "id": result[0],
+                "name": result[1],
+                "email": result[2],
+                "role": "super_admin"
+            }
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Internal Server Login Error: {str(e)}"}), 500
+
+
+def create_school_college_admin_logic():
+    """2. 🆕 नया स्कूल एडमिन क्रिएशन लॉजिक (मल्टी-टेनेंट स्कीमा आधारित)"""
     try:
         # 1. Authorization check for Super Admin
         claims = get_jwt()
@@ -21,7 +63,6 @@ def create_school_college_admin():
         if not data:
             return jsonify({"error": "Missing JSON request payload"}), 400
 
-        # Exact requested fields extraction
         name = data.get('name')
         email = data.get('email')
         mobile = data.get('mobile')
@@ -50,6 +91,7 @@ def create_school_college_admin():
         # 6. Cryptography password generation & safe SQL execution
         hashed_password = generate_password_hash(password)
         
+        # मोबाइल कॉलम को इन्सर्ट क्वेरी में शामिल किया गया है
         db.session.execute(db.text(f"""
             INSERT INTO {tenant_schema}.users (name, email, mobile, password_hash, role, status)
             VALUES (:name, :email, :mobile, :password_hash, 'School Aadmin', 'active');
