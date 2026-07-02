@@ -22,7 +22,7 @@ class Config:
 
 class DevelopmentConfig(Config):
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL') or "postgresql://neondb_owner:npg_UpeHSjEu9gx4@ep-dark-star-ah3akqx1-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require"
+    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
 
 class ProductionConfig(Config):
     DEBUG = False
