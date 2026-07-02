@@ -1,4 +1,4 @@
-from src.db import db
+from src.extensions import db
 
 class User(db.Model):
     __tablename__ = 'users'

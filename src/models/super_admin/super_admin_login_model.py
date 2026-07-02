@@ -1,5 +1,6 @@
-from src.db import db
 from werkzeug.security import check_password_hash
+from src.extensions import db
+
 
 class SuperAdmin(db.Model):
     __tablename__ = 'super_admins'
