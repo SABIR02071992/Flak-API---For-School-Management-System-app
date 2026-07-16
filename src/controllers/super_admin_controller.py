@@ -1,64 +1,253 @@
 # src/controllers/super_admin_controller.py
+# from flask import request, jsonify
+# from flask_jwt_extended import create_access_token, get_jwt
+# from werkzeug.security import generate_password_hash
+# from src.extensions import db  # db अब extensions.py से इम्पोर्ट हो रहा है
+# from src.models.school_model import School
+
+# def super_admin_login_logic():
+#     """1. सुपर एडमिन लॉगिन लॉजिक (PostgreSQL crypt() आधारित)"""
+#     try:
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"error": "Missing JSON request payload"}), 400
+            
+#         email = data.get('email')
+#         password = data.get('password')
+
+#         if not email or not password:
+#             return jsonify({"error": "Email and password are required"}), 400
+
+#         # PostgreSQL crypt() के ज़रिए पासवर्ड मैच करने की क्वेरी
+#         query = """
+#             SELECT id, name, email FROM public.super_admins 
+#             WHERE email = :email AND password_hash = crypt(:password, password_hash);
+#         """
+#         result = db.session.execute(db.text(query), {"email": email, "password": password}).fetchone()
+
+#         if result is None:
+#             return jsonify({"error": "Invalid Email or Password"}), 401
+
+#         # रियल JWT टोकन जनरेशन (सुपर एडमिन रोल के साथ)
+#         access_token = create_access_token(
+#             identity=str(result[0]), 
+#             additional_claims={"role": "super_admin"}
+#         )
+
+#         return jsonify({
+#             "success": True,
+#             "message": "Super Admin Login Successful!",
+#             "token": access_token,
+#             "user": {
+#                 "id": result[0],
+#                 "name": result[1],
+#                 "email": result[2],
+#                 "role": "super_admin"
+#             }
+#         }), 200
+
+#     except Exception as e:
+#         return jsonify({"error": f"Internal Server Login Error: {str(e)}"}), 500
+
+
+# def create_school_college_admin_logic():
+#     """Create User Logic (Super Admin / School Admin)"""
+#     try:
+#         # 1. Get Logged-in User Role
+#         claims = get_jwt()
+#         logged_in_role = claims.get("role")
+
+#         # 2. Parse Request Payload
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"error": "Missing JSON request payload"}), 400
+
+#         name = data.get("name")
+#         email = data.get("email")
+#         mobile = data.get("mobile")
+#         school_domain = data.get("school_domain")
+#         password = data.get("password")
+#         role = data.get("role")
+
+#         # 3. Mandatory Fields Validation
+#         if not all([name, email, mobile, school_domain, password, role]):
+#             return jsonify({
+#                 "error": "All fields (name, email, mobile, school_domain, password, role) are mandatory"
+#             }), 400
+
+#         # 4. Permission Check
+#         if logged_in_role == "super_admin":
+#             allowed_roles = [
+#                 "School Admin",
+#                 "Teacher",
+#                 "Student",
+#                 "Parent"
+#             ]
+
+#         elif logged_in_role == "School Admin":
+#             allowed_roles = [
+#                 "Teacher",
+#                 "Student",
+#                 "Parent"
+#             ]
+
+#         else:
+#             return jsonify({
+#                 "error": "You are not authorized to create users."
+#             }), 403
+
+#         if role not in allowed_roles:
+#             return jsonify({
+#                 "error": f"You are not allowed to create '{role}' users."
+#             }), 403
+
+#         # 5. Fetch School Information
+#         target_school = School.query.filter_by(
+#             domain=school_domain,
+#             status="active"
+#         ).first()
+
+#         if not target_school:
+#             return jsonify({
+#                 "error": f"Active school/college with domain '{school_domain}' does not exist"
+#             }), 404
+
+#         tenant_schema = target_school.schema_name
+
+#         # 6. Check Duplicate Email
+#         user_exists = db.session.execute(
+#             db.text(f"""
+#                 SELECT id
+#                 FROM {tenant_schema}.users
+#                 WHERE email = :email
+#                 LIMIT 1;
+#             """),
+#             {"email": email}
+#         ).fetchone()
+
+#         if user_exists:
+#             return jsonify({
+#                 "error": f"Email '{email}' is already registered in {target_school.name}"
+#             }), 400
+
+#         # 7. Hash Password
+#         hashed_password = generate_password_hash(password)
+
+#         # 8. Insert User
+#         db.session.execute(
+#             db.text(f"""
+#                 INSERT INTO {tenant_schema}.users
+#                 (name, email, mobile, password_hash, role, status)
+#                 VALUES
+#                 (:name, :email, :mobile, :password_hash, :role, 'active');
+#             """),
+#             {
+#                 "name": name,
+#                 "email": email,
+#                 "mobile": mobile,
+#                 "password_hash": hashed_password,
+#                 "role": role
+#             }
+#         )
+
+#         db.session.commit()
+
+#         # 9. Success Response
+#         return jsonify({
+#             "success": True,
+#             "message": f"{role} created successfully under {target_school.name}",
+#             "user": {
+#                 "name": name,
+#                 "email": email,
+#                 "mobile": mobile,
+#                 "role": role,
+#                 "schoolName": target_school.name,
+#                 "schemaContext": tenant_schema
+#             }
+#         }), 201
+
+#     except Exception as e:
+#         db.session.rollback()
+#         return jsonify({
+#             "error": f"Internal Server Crash Error: {str(e)}"
+#         }), 500
+
+# src/controllers/super_admin_controller.py
+
 from flask import request, jsonify
 from flask_jwt_extended import create_access_token, get_jwt
 from werkzeug.security import generate_password_hash
-from src.extensions import db  # db अब extensions.py से इम्पोर्ट हो रहा है
+from src.extensions import db
 from src.models.school_model import School
 
+
 def super_admin_login_logic():
-    """1. सुपर एडमिन लॉगिन लॉजिक (PostgreSQL crypt() आधारित)"""
+    """Super Admin Login Logic"""
     try:
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing JSON request payload"}), 400
-            
-        email = data.get('email')
-        password = data.get('password')
+
+        email = data.get("email")
+        password = data.get("password")
 
         if not email or not password:
             return jsonify({"error": "Email and password are required"}), 400
 
-        # PostgreSQL crypt() के ज़रिए पासवर्ड मैच करने की क्वेरी
         query = """
-            SELECT id, name, email FROM public.super_admins 
-            WHERE email = :email AND password_hash = crypt(:password, password_hash);
+            SELECT id, name, email
+            FROM public.super_admins
+            WHERE email = :email
+              AND password_hash = crypt(:password, password_hash);
         """
-        result = db.session.execute(db.text(query), {"email": email, "password": password}).fetchone()
+
+        result = db.session.execute(
+            db.text(query),
+            {
+                "email": email,
+                "password": password,
+            },
+        ).fetchone()
 
         if result is None:
             return jsonify({"error": "Invalid Email or Password"}), 401
 
-        # रियल JWT टोकन जनरेशन (सुपर एडमिन रोल के साथ)
         access_token = create_access_token(
-            identity=str(result[0]), 
-            additional_claims={"role": "super_admin"}
+            identity=str(result[0]),
+            additional_claims={"role": "super_admin"},
         )
 
-        return jsonify({
-            "success": True,
-            "message": "Super Admin Login Successful!",
-            "token": access_token,
-            "user": {
-                "id": result[0],
-                "name": result[1],
-                "email": result[2],
-                "role": "super_admin"
+        return jsonify(
+            {
+                "success": True,
+                "message": "Super Admin Login Successful!",
+                "token": access_token,
+                "user": {
+                    "id": result[0],
+                    "name": result[1],
+                    "email": result[2],
+                    "role": "super_admin",
+                },
             }
-        }), 200
+        ), 200
 
     except Exception as e:
-        return jsonify({"error": f"Internal Server Login Error: {str(e)}"}), 500
+        return jsonify(
+            {"error": f"Internal Server Login Error: {str(e)}"}
+        ), 500
 
 
 def create_school_college_admin_logic():
-    """Create User Logic (Super Admin / School Admin)"""
+    """Create User Logic"""
+
     try:
-        # 1. Get Logged-in User Role
+        # Logged-in User Role
         claims = get_jwt()
         logged_in_role = claims.get("role")
 
-        # 2. Parse Request Payload
+        # Request Body
         data = request.get_json()
+
         if not data:
             return jsonify({"error": "Missing JSON request payload"}), 400
 
@@ -69,105 +258,163 @@ def create_school_college_admin_logic():
         password = data.get("password")
         role = data.get("role")
 
-        # 3. Mandatory Fields Validation
+        # Mandatory Validation
         if not all([name, email, mobile, school_domain, password, role]):
-            return jsonify({
-                "error": "All fields (name, email, mobile, school_domain, password, role) are mandatory"
-            }), 400
+            return jsonify(
+                {
+                    "error": "All fields (name, email, mobile, school_domain, password, role) are mandatory"
+                }
+            ), 400
 
-        # 4. Permission Check
-        if logged_in_role == "super_admin":
-            allowed_roles = [
+        # ==========================================================
+        # ROLE PERMISSION MATRIX
+        # ==========================================================
+
+        role_permissions = {
+            "super_admin": [
                 "School Admin",
                 "Teacher",
                 "Student",
-                "Parent"
-            ]
+                "Parent",
+            ],
 
-        elif logged_in_role == "School Admin":
-            allowed_roles = [
+            "School Admin": [
                 "Teacher",
                 "Student",
-                "Parent"
-            ]
+                "Parent",
+            ],
 
-        else:
-            return jsonify({
-                "error": "You are not authorized to create users."
-            }), 403
+            "Teacher": [
+                "Student",
+                "Parent",
+            ],
+        }
+
+        allowed_roles = role_permissions.get(logged_in_role)
+
+        if allowed_roles is None:
+            return jsonify(
+                {
+                    "error": "You are not authorized to create users."
+                }
+            ), 403
 
         if role not in allowed_roles:
-            return jsonify({
-                "error": f"You are not allowed to create '{role}' users."
-            }), 403
+            return jsonify(
+                {
+                    "error": f"'{logged_in_role}' cannot create '{role}' users."
+                }
+            ), 403
 
-        # 5. Fetch School Information
+        # ==========================================================
+        # Fetch School
+        # ==========================================================
+
         target_school = School.query.filter_by(
             domain=school_domain,
-            status="active"
+            status="active",
         ).first()
 
         if not target_school:
-            return jsonify({
-                "error": f"Active school/college with domain '{school_domain}' does not exist"
-            }), 404
+            return jsonify(
+                {
+                    "error": f"Active school/college with domain '{school_domain}' does not exist"
+                }
+            ), 404
 
         tenant_schema = target_school.schema_name
 
-        # 6. Check Duplicate Email
+        # ==========================================================
+        # Duplicate Email Check
+        # ==========================================================
+
         user_exists = db.session.execute(
-            db.text(f"""
+            db.text(
+                f"""
                 SELECT id
                 FROM {tenant_schema}.users
                 WHERE email = :email
                 LIMIT 1;
-            """),
-            {"email": email}
+                """
+            ),
+            {"email": email},
         ).fetchone()
 
         if user_exists:
-            return jsonify({
-                "error": f"Email '{email}' is already registered in {target_school.name}"
-            }), 400
+            return jsonify(
+                {
+                    "error": f"Email '{email}' is already registered in {target_school.name}"
+                }
+            ), 400
 
-        # 7. Hash Password
+        # ==========================================================
+        # Password Hash
+        # ==========================================================
+
         hashed_password = generate_password_hash(password)
 
-        # 8. Insert User
+        # ==========================================================
+        # Insert User
+        # ==========================================================
+
         db.session.execute(
-            db.text(f"""
+            db.text(
+                f"""
                 INSERT INTO {tenant_schema}.users
-                (name, email, mobile, password_hash, role, status)
+                (
+                    name,
+                    email,
+                    mobile,
+                    password_hash,
+                    role,
+                    status
+                )
                 VALUES
-                (:name, :email, :mobile, :password_hash, :role, 'active');
-            """),
+                (
+                    :name,
+                    :email,
+                    :mobile,
+                    :password_hash,
+                    :role,
+                    'active'
+                );
+                """
+            ),
             {
                 "name": name,
                 "email": email,
                 "mobile": mobile,
                 "password_hash": hashed_password,
-                "role": role
-            }
+                "role": role,
+            },
         )
 
         db.session.commit()
 
-        # 9. Success Response
-        return jsonify({
-            "success": True,
-            "message": f"{role} created successfully under {target_school.name}",
-            "user": {
-                "name": name,
-                "email": email,
-                "mobile": mobile,
-                "role": role,
-                "schoolName": target_school.name,
-                "schemaContext": tenant_schema
+        # ==========================================================
+        # Success Response
+        # ==========================================================
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"{role} created successfully under {target_school.name}",
+                "user": {
+                    "name": name,
+                    "email": email,
+                    "mobile": mobile,
+                    "role": role,
+                    "schoolName": target_school.name,
+                    "schemaContext": tenant_schema,
+                },
             }
-        }), 201
+        ), 201
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({
-            "error": f"Internal Server Crash Error: {str(e)}"
-        }), 500
+
+        return jsonify(
+            {
+                "error": f"Internal Server Crash Error: {str(e)}"
+            }
+        ), 500

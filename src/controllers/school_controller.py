@@ -6,6 +6,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash
 from src.extensions import db  # 💡 db अब extensions से आएगा
 from src.models.school_model import School
+from src.utils.tenant_tables import create_tenant_tables
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
@@ -73,18 +74,21 @@ def setup_school_multipart():
         db.session.refresh(new_school)
 
         # स्कीमा के अंदर यूजर्स टेबल बनाना
-        db.session.execute(db.text(f"""
-            CREATE TABLE IF NOT EXISTS {generated_schema_name}.users (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(100) NOT NULL,
-                email VARCHAR(120) UNIQUE NOT NULL,
-                password_hash VARCHAR(255) NOT NULL,
-                role VARCHAR(50) NOT NULL,
-                status VARCHAR(20) DEFAULT 'active',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """))
-        db.session.commit()
+        # db.session.execute(db.text(f"""
+        #     CREATE TABLE IF NOT EXISTS {generated_schema_name}.users (
+        #         id SERIAL PRIMARY KEY,
+        #         name VARCHAR(100) NOT NULL,
+        #         email VARCHAR(120) UNIQUE NOT NULL,
+        #         password_hash VARCHAR(255) NOT NULL,
+        #         role VARCHAR(50) NOT NULL,
+        #         status VARCHAR(20) DEFAULT 'active',
+        #         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        #     );
+        # """))
+        # db.session.commit()
+        # Tenant schema ki saari required tables create karo
+        # Tenant schema ki saari required tables create karo
+        create_tenant_tables(generated_schema_name)
 
         # डिफ़ॉल्ट स्कूल एडमिन (Principal) जोड़ना
         hashed_password = generate_password_hash("Admin@123")
