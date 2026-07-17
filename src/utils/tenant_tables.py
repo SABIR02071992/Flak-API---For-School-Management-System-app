@@ -13,8 +13,9 @@ def create_tenant_tables(schema_name: str):
         CREATE TABLE IF NOT EXISTS {schema_name}.users (
             id SERIAL PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
-            email VARCHAR(120) UNIQUE NOT NULL,
-            password_hash VARCHAR(255) NOT NULL,
+            email VARCHAR(100) UNIQUE NOT NULL,
+            mobile VARCHAR(20),
+            password_hash TEXT NOT NULL,
             role VARCHAR(50) NOT NULL,
             status VARCHAR(20) DEFAULT 'active',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
