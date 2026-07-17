@@ -171,3 +171,67 @@ def create_student_logic():
             "success": False,
             "message": str(e)
         }), 500
+    
+def get_all_students_logic():
+    try:
+        claims = get_jwt()
+        tenant_schema = claims.get("schema_context")
+
+        if not tenant_schema:
+            return jsonify({
+                "success": False,
+                "message": "Invalid tenant schema."
+            }), 400
+
+
+        # Tenant schema set
+        db.session.execute(
+        text(f'SET search_path TO "{tenant_schema}"'))
+
+        db.session.commit()
+        students = db.session.execute(
+            text(
+                f'''
+                SELECT *
+                FROM "{tenant_schema}".students
+                ORDER BY id DESC
+                '''
+            )
+        ).mappings().all()
+
+        student_list = []
+
+        for student in students:
+            student_list.append({
+                "id": student.id,
+                "admission_no": student.admission_no,
+                "roll_no": student.roll_no,
+                "first_name": student.first_name,
+                "last_name": student.last_name,
+                "gender": student.gender,
+                "dob": student.dob.strftime("%Y-%m-%d") if student.dob else None,
+                "mobile": student.mobile,
+                "email": student.email,
+                "father_name": student.father_name,
+                "mother_name": student.mother_name,
+                "class_name": student.class_name,
+                "section": student.section,
+                "photo": student.photo,
+                "status": student.status
+            })
+
+
+        return jsonify({
+            "success": True,
+            "count": len(student_list),
+            "students": student_list
+        }), 200
+
+
+    except Exception as e:
+        db.session.rollback()
+
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
